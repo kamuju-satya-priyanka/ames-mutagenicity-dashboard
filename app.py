@@ -28,13 +28,15 @@ from PIL import Image
 # ── RDKit ──────────────────────────────────────────────────────────────────────
 from rdkit import Chem
 from rdkit.Chem import (
-    AllChem, Descriptors, rdMolDescriptors, rdFingerprintGenerator
+    Descriptors, rdMolDescriptors, rdFingerprintGenerator
 )
 try:
     from rdkit.Chem import Draw
     from rdkit.Chem.Draw import rdMolDraw2D
     _DRAW_AVAILABLE = True
 except ImportError:
+    Draw = None
+    rdMolDraw2D = None
     _DRAW_AVAILABLE = False
 
 # ── SHAP ───────────────────────────────────────────────────────────────────────
