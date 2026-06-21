@@ -28,9 +28,14 @@ from PIL import Image
 # ── RDKit ──────────────────────────────────────────────────────────────────────
 from rdkit import Chem
 from rdkit.Chem import (
-    AllChem, Descriptors, Draw, rdMolDescriptors, rdFingerprintGenerator
+    AllChem, Descriptors, rdMolDescriptors, rdFingerprintGenerator
 )
-from rdkit.Chem.Draw import rdMolDraw2D
+try:
+    from rdkit.Chem import Draw
+    from rdkit.Chem.Draw import rdMolDraw2D
+    _DRAW_AVAILABLE = True
+except ImportError:
+    _DRAW_AVAILABLE = False
 
 # ── SHAP ───────────────────────────────────────────────────────────────────────
 import shap
@@ -450,16 +455,36 @@ def smiles_to_fingerprint(smiles: str) -> Optional[np.ndarray]:
 
 
 def mol_to_image(mol, size: tuple[int, int] = (400, 300)) -> str:
-    """Render an RDKit molecule to a base64-encoded SVG data URI."""
+    """Render an RDKit molecule to a base64-encoded image data URI.
+
+    Tries rdMolDraw2D (SVG) first; falls back to a matplotlib/PIL PNG
+    when the C extension is unavailable (e.g. Python 3.14 ABI mismatch).
+    """
     import base64
-    drawer = rdMolDraw2D.MolDraw2DSVG(size[0], size[1])
-    drawer.drawOptions().addStereoAnnotation = True
-    drawer.drawOptions().padding = 0.15
-    drawer.DrawMolecule(mol)
-    drawer.FinishDrawing()
-    svg_str = drawer.GetDrawingText()
-    b64 = base64.b64encode(svg_str.encode("utf-8")).decode("utf-8")
-    return f"data:image/svg+xml;base64,{b64}"
+
+    if _DRAW_AVAILABLE:
+        # Fast SVG path via native C extension
+        drawer = rdMolDraw2D.MolDraw2DSVG(size[0], size[1])
+        drawer.drawOptions().addStereoAnnotation = True
+        drawer.drawOptions().padding = 0.15
+        drawer.DrawMolecule(mol)
+        drawer.FinishDrawing()
+        svg_str = drawer.GetDrawingText()
+        b64 = base64.b64encode(svg_str.encode("utf-8")).decode("utf-8")
+        return f"data:image/svg+xml;base64,{b64}"
+
+    # Fallback: matplotlib kekulé structure via RDKit Draw.MolToImage
+    try:
+        from rdkit.Chem import Draw as _RDDraw
+        pil_img = _RDDraw.MolToImage(mol, size=size)
+    except Exception:
+        # Last-resort blank placeholder
+        pil_img = Image.new("RGB", size, color=(17, 24, 39))
+
+    buf = io.BytesIO()
+    pil_img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+    return f"data:image/png;base64,{b64}"
 
 
 def compute_descriptors(mol) -> dict:
