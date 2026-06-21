@@ -1,0 +1,7 @@
+[server]
+# Disable file-system watcher on Streamlit Cloud — inotify limits in
+# the container make this noisy and unnecessary (no hot-reload needed).
+fileWatcherType = "none"
+
+[browser]
+gatherUsageStats = false
